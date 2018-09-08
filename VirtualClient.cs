@@ -1,8 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
-using System.Threading;
 using TMediator;
-using ArgList = System.Object;
 
 namespace SocketNet {
 
@@ -36,33 +34,31 @@ namespace SocketNet {
 		public byte[] data;
 	}
 
-	public delegate void EventCallback(ArgList arglist);
-	public delegate void DataCallback(byte[] data,int len);
+	public delegate void DataCallback(RespRawData o);
 
 	public class VirtualClient {
 
-		protected Mediator _mediator;
-		public Mediator mediator{
-			get{
-				return _mediator;
-			}
-			set{
-				if(_mediator!=null){
-					_mediator.removeSubscriber(subscribeid,new string[]{"socket-received-data"});
-				}
-				_mediator=value;
-				subscribeid=_mediator.subscribe("socket-received-data",this._onReceivedData).id;
+		public event Action<ReqInfo> SendData;
+		public event Action<ReqInfo> PostData;
+		// public event Action<string,object> NotifyNetEvent;
+		public void _SendData(ReqInfo reqinfo,string fmethod){
+			switch(fmethod){
+				case "send":
+					// NotifyNetEvent("socket-send-data",reqinfo);
+					SendData(reqinfo);
+					break;
+				case "post":
+					// NotifyNetEvent("socket-post-data",reqinfo);
+					PostData(reqinfo);
+					break;
+				default:
+					throw new Exception(string.Format("no such method {0}",fmethod));
 			}
 		}
 
-		public VirtualClient () { }
+		public Mediator mediator;
 
-		int subscribeid;
-		public void init(Mediator mediator){
-		}
-
-		protected void _onReceivedData(ArgList e){
-			var reqinfo=(RespRawData)e;
+		public void OnReceivedData(RespRawData reqinfo){
 			var bytedata=reqinfo.data;
 			var len=reqinfo.size;
 			var rawdata=(SessionRawData)DataTypeUtil.BytesToStruct(bytedata,typeof(SessionRawData),len);
@@ -87,6 +83,12 @@ namespace SocketNet {
 		}
 
 		public bool Send(SessionInfo info,DataCallback fn){
+			return _Send(info,fn,"send");
+		}
+		public bool Post(SessionInfo info,DataCallback fn){
+			return _Send(info,fn,"post");
+		}
+		public bool _Send(SessionInfo info,DataCallback fn,string fmethod){
 			info.sessionid=GenSessionId();
 			
 			var sessionid=info.sessionid;
@@ -98,11 +100,11 @@ namespace SocketNet {
 			};
 			
 			var id=0;
-			id=_mediator.once("client-received-data",(e)=>{
-				var reqinfo=(RespData)e;
+			id=mediator.once("client-received-data",(o)=>{
+				var reqinfo=(RespData)o;
 				var bytedata=reqinfo.data;
-				var len=reqinfo.size;
-				fn(bytedata,len);
+				var size=reqinfo.size;
+				fn(new RespRawData{data=bytedata,size=size});
 			},new Options{
 				predicate=(e)=>{
 					var reqinfo=(RespData)e;
@@ -113,11 +115,12 @@ namespace SocketNet {
 			{
 				var len=Marshal.SizeOf(typeof(SessionRawDataHead))+((byte[])rawdata.data).Length;
 				var bytedata=DataTypeUtil.StructToBytes(rawdata,len);
-				_mediator.publish("socket-send-data",new ReqInfo{
+				var reqinfo=new ReqInfo{
 					method=info.method,
 					data=bytedata,
 					len=len,
-				});
+				};
+				this._SendData(reqinfo,fmethod);
 			}
 
 			return true;
@@ -127,8 +130,8 @@ namespace SocketNet {
 			return mediator.subscribe("client-received-data",(e)=>{
 				var reqinfo=(RespData)e;
 				var bytedata=reqinfo.data;
-				var len=reqinfo.size;
-				fn(bytedata,len);
+				var size=reqinfo.size;
+				fn(new RespRawData{data=bytedata,size=size});
 
 			},new Options{
 				predicate=(e)=>{
@@ -140,10 +143,10 @@ namespace SocketNet {
 
 		public void OnSessionRespOnce(ReqId reqid,DataCallback fn){
 			var id=0;
-			id=OnResp(reqid,(databytes,len)=>{
+			id=OnResp(reqid,(o)=>{
 				mediator.removeSubscriber(id,new string[]{"client-received-data"});
 
-				fn(databytes,len);
+				fn(o);
 			});
 		}
 

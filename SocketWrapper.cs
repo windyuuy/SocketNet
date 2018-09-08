@@ -1,15 +1,10 @@
 ﻿using Nito.Collections;
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using TMediator;
-using ArgList = System.Object;
 
 namespace SocketNet {
 	using SessionId = System.UInt32;
@@ -283,11 +278,10 @@ namespace SocketNet {
 		}
 
 		protected void _OnReceiveData (byte[] bodyBytes, int bodysize) {
-			// _mediator.publish (new string[] { "socket-received-data" }, new ArgList {
-			// 	["data"] = bodyBytes, ["size"] = bodysize });
-			this.onReceivedData(new RespRawData {data = bodyBytes, size = bodysize });
+			var respdata=new RespRawData {data = bodyBytes, size = bodysize };
+			this.NotifyReceivedData(respdata);
 		}
-		public event Action<RespRawData> onReceivedData;
+		public event Action<RespRawData> NotifyReceivedData;
 
 		public bool Connect (string ip, int port) {
 			_ip = ip;
@@ -349,7 +343,7 @@ namespace SocketNet {
 			return true;
 		}
 
-		public void post (ReqInfo info) {
+		public void Post (ReqInfo info) {
 			var count=_PostDeque.Count;
 			this._PostDeque.AddToBack (info);
 			if (count==0 && _PostDeque.Count !=0) {
@@ -357,7 +351,7 @@ namespace SocketNet {
 			}
 		}
 
-		public void send (ReqInfo info) {
+		public void Send (ReqInfo info) {
 			var count=_PostDeque.Count;
 			this._PostDeque.AddToFront (info);
 			if (count==0 && _PostDeque.Count !=0) {
