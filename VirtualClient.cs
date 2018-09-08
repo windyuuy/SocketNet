@@ -81,9 +81,9 @@ namespace SocketNet {
 			return curid++;
 		}
 
-        public bool Send(SessionInfo info, DataCallback fn) => _Send(info, fn, "send");
-        public bool Post(SessionInfo info, DataCallback fn) => _Send(info, fn, "post");
-        public bool _Send (SessionInfo info, DataCallback fn, string fmethod) {
+		public bool Send (SessionInfo info, DataCallback fn) => _Send (info, fn, "send");
+		public bool Post (SessionInfo info, DataCallback fn) => _Send (info, fn, "post");
+		public bool _Send (SessionInfo info, DataCallback fn, string fmethod) {
 			info.sessionid = GenSessionId ();
 
 			var sessionid = info.sessionid;
