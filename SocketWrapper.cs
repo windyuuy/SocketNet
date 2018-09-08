@@ -330,9 +330,17 @@ namespace SocketNet {
 					this._OnReceiveData (bodyBytes, bodysize);
 
 				} catch (SocketException e) {
-					_ReadingStream = false;
-				}
-			}
+				}catch(InvalidOperationException e)
+                {
+                }catch(Exception e)
+                {
+                    log.Error(string.Format("error: {0}",e));
+                }
+                finally
+                {
+                    _ReadingStream = false;
+                }
+            }
 			_ProcessCount.Release ();
 		}
 
