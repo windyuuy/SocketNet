@@ -51,12 +51,15 @@ namespace SocketNet {
 		AutoResetEvent _ConnEventR;
 		AutoResetEvent _ConnEventW;
 		AutoResetEvent _QueueEvent;
-		Deque<ReqInfo> _PostDeque;
+		SafeDeque<ReqInfo> _PostDeque;
 		Task _ConnHand;
+
+		Logger log;
 		public SocketWrapper () {
+				log = new Logger ("SocketWrapper");
 				_socket = new Socket (AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 				_CurWaitReadSize = _RespInfoSize;
-				_PostDeque = new Deque<ReqInfo> ();
+				_PostDeque = new SafeDeque<ReqInfo> ();
 				_ConnEventR = new AutoResetEvent (false);
 				_ConnEventW = new AutoResetEvent (false);
 				_QueueEvent = new AutoResetEvent (false);
@@ -129,17 +132,18 @@ namespace SocketNet {
 		}
 
 		protected int _ReceiveTimeout = 1000;
-		protected int _PollTimeout = 1000*1000;
+		protected int _PollTimeout = 1000 * 1000;
 		protected void _SetBlocking (bool b) {
 			// _OPSocket.WaitOne ();
-			// _socket.Blocking=b;
+			_socket.Blocking = b;
 			// _OPSocket.Set();
-			_socket.Blocking = true;
-			if (b) {
-				_socket.ReceiveTimeout = _ReceiveTimeout;
-			} else {
-				_socket.ReceiveTimeout = 1;
-			}
+
+			// _socket.Blocking = true;
+			// if (b) {
+			// 	_socket.ReceiveTimeout = _ReceiveTimeout;
+			// } else {
+			// 	_socket.ReceiveTimeout = 1;
+			// }
 		}
 
 		Semaphore _ProcessCount;
@@ -160,7 +164,9 @@ namespace SocketNet {
 						b = false;
 					}
 				} catch (SocketException e) {
-					if (!e.NativeErrorCode.Equals (10035)) {
+					if ((!e.NativeErrorCode.Equals (10035))
+						// && (!e.NativeErrorCode.Equals (10060))
+					) {
 						b = false;
 					}
 				} finally {
@@ -172,10 +178,12 @@ namespace SocketNet {
 				try {
 					_SetBlocking (false);
 					byte[] tmp = new byte[2];
-					// int nRead = _Receive (tmp, 1, SocketFlags.Peek);
+					int nRead = _Receive (tmp, 1, SocketFlags.Peek);
 					_Send (tmp, 0, SocketFlags.None);
 				} catch (SocketException e) {
-					if (!e.NativeErrorCode.Equals (10035)) {
+					if ((!e.NativeErrorCode.Equals (10035))
+						// && (!e.NativeErrorCode.Equals (10060))
+					) {
 						b = false;
 					}
 				} finally {
@@ -192,20 +200,23 @@ namespace SocketNet {
 			_ProcessCount.WaitOne ();
 			_socket.SendTimeout = _ReceiveTimeout;
 			while (true) {
-				//Console.WriteLine("lkjef");
 				if (_AbortWriteStream) {
 					break;
 				}
 
 				if (_PostDeque.Count <= 0) {
+					// log.Debug ("waitq");
 					_QueueEvent.WaitOne ();
+					// log.Debug ("exit waitq");
 					if (_PostDeque.Count <= 0) {
 						continue;
 					}
 				}
 
 				if (!this.IsConnected ()) {
+					// log.Debug ("waitcn");
 					_ConnEventW.WaitOne ();
+					// log.Debug ("exit waitcn");
 					if (!this.IsConnected ()) {
 						continue;
 					}
@@ -232,15 +243,21 @@ namespace SocketNet {
 					Buffer.BlockCopy (info.data, 0, respBytes, respheadsize, info.len);
 					Buffer.BlockCopy (endBytes, 0, respBytes, respheadsize + info.len, respendsize);
 					_WritingStream = true;
-					_Send (respBytes, respinfosize, SocketFlags.None);
+					int nResult = _Send (respBytes, respinfosize, SocketFlags.None);
+					//totalsentsize += nResult;
+					//log.Debug ("Sent: {0} {1}", totalsentsize, nResult);
 					_WritingStream = false;
-					_PostDeque.RemoveFromFront ();
+					_PostDeque.GetRemoveFromFront ();
 				} catch (Exception e) {
 					_WritingStream = false;
 				}
 			}
+			//log.Debug ("exit writing");
 			_ProcessCount.Release ();
 		}
+
+		//int totalrecvsize = 0;
+		//int totalsentsize = 0;
 
 		protected bool _ReadingStream = false;
 		protected bool _AbortReadStream = false;
@@ -274,6 +291,7 @@ namespace SocketNet {
 					if (nResult == 0) {
 						continue;
 					} else if (respinfo.mark != RespHeadInfo.headmark) {
+						log.Warn ("unmatch headmark");
 						_Receive (recvBytes, 1, SocketFlags.None);
 						continue;
 					}
@@ -293,6 +311,8 @@ namespace SocketNet {
 					if (nResult2 == 0) {
 						continue;
 					}
+					//totalrecvsize += nResult2;
+					//log.Debug("size: {0} {1}", totalrecvsize, nResult);
 					_CurWaitReadSize = _RespInfoSize;
 					_ReadingStream = false;
 
@@ -302,18 +322,15 @@ namespace SocketNet {
 					var end = (RespEndInfo) DataTypeUtil.BytesToStruct (endBytes, typeof (RespEndInfo), respendsize);
 
 					if (end.mark != RespEndInfo.endmark) {
-						Console.WriteLine ("error:unmatched mark");
+						log.Warn ("error:unmatched mark");
 					}
 					// var str = Encoding.Unicode.GetString (bodyBytes, 0, bodysize);
-					// Console.WriteLine (str);
+					// log.Debug (str);
 
 					this._OnReceiveData (bodyBytes, bodysize);
 
 				} catch (SocketException e) {
 					_ReadingStream = false;
-				} catch (Exception e) {
-					_ReadingStream = false;
-					Console.WriteLine (e);
 				}
 			}
 			_ProcessCount.Release ();

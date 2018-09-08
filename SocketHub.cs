@@ -20,8 +20,9 @@ namespace SocketNet {
 				foreach (var key in _ActionMap.Keys) {
 					if (_eventhub != null) {
 						var eventfilter = new EventFilter (key);
+						var fn = _ActionMap[key];
+						eventfilter.notify += (k, o) => fn (o);
 						eventhub.notify += eventfilter.input;
-						eventfilter.notify += (k, o) => _ActionMap[key] (o);
 						_NetSubIds[key] = eventfilter;
 					}
 				}
@@ -74,10 +75,10 @@ namespace SocketNet {
 			}
 		}
 		public event Action<string, object> NotifyNetEvent;
-        public void OnNetEvent(string key, object o) => eventhub.input(key, o);
-        public void OnSendData(ReqInfo reqinfo) => NotifyNetEvent("socket-send-data", reqinfo);
-        public void OnPostData(ReqInfo reqinfo) => NotifyNetEvent("socket-post-data", reqinfo);
-        public event Action<RespRawData> NotifyReceiveData;
+		public void OnNetEvent (string key, object o) => eventhub.input (key, o);
+		public void OnSendData (ReqInfo reqinfo) => NotifyNetEvent ("socket-send-data", reqinfo);
+		public void OnPostData (ReqInfo reqinfo) => NotifyNetEvent ("socket-post-data", reqinfo);
+		public event Action<RespRawData> NotifyReceiveData;
 		public ClientHub () {
 			_Nethub = new NetHub ();
 			_Nethub.ActionMap = new Dictionary<string, Action<object>> {
