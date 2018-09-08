@@ -4,30 +4,30 @@ using TMediator;
 
 namespace SocketNet {
 	class NetHub {
-		protected Mediator _mediator;
-		public Mediator mediator {
+		protected EventHub _eventhub;
+		public EventHub eventhub {
 			get {
-				return _mediator;
+				return _eventhub;
 			}
 			set {
 				foreach (var key in _ActionMap.Keys) {
-					if (_mediator != null) {
-						_mediator.removeSubscriber (_NetSubIds[key], new string[] { key });
-						// _NetSubIds.Remove(key);
-						_NetSubIds[key]=0;
+					if (_eventhub != null) {
+						_eventhub.notify -= _NetSubIds[key].input;
+						_NetSubIds[key] = null;
 					}
 				}
-				_mediator = value;
+				_eventhub = value;
 				foreach (var key in _ActionMap.Keys) {
-					if (_mediator != null) {
-						_NetSubIds[key] = _mediator.subscribe (key, (o) => {
-							_ActionMap[key] (o);
-						}).id;
+					if (_eventhub != null) {
+						var eventfilter = new EventFilter (key);
+						eventhub.notify += eventfilter.input;
+						eventfilter.notify += (k, o) => _ActionMap[key] (o);
+						_NetSubIds[key] = eventfilter;
 					}
 				}
 			}
 		}
-		protected Dictionary<string, int> _NetSubIds = new Dictionary<string, int> ();
+		protected Dictionary<string, EventFilter> _NetSubIds = new Dictionary<string, EventFilter> ();
 		protected Dictionary<string, Action<object>> _ActionMap;
 
 		public Dictionary<string, Action<object>> ActionMap {
@@ -39,21 +39,17 @@ namespace SocketNet {
 
 	public class SocketHub {
 		NetHub _Nethub;
-		public Mediator mediator {
+		public EventHub eventhub {
 			get {
-				return _Nethub.mediator;
+				return _Nethub.eventhub;
 			}
 			set {
-				_Nethub.mediator = value;
+				_Nethub.eventhub = value;
 			}
 		}
 		public event Action<string, object> NotifyNetEvent;
-		public void OnNetEvent (string key, object o) {
-			mediator.publish (key, o);
-		}
-		public void OnReceiveData (RespRawData respdata) {
-			NotifyNetEvent ("socket-received-data", respdata);
-		}
+		public void OnNetEvent (string key, object o) => eventhub.input (key, o);
+		public void OnReceiveData (RespRawData respdata) => NotifyNetEvent ("socket-received-data", respdata);
 		public event Action<ReqInfo> NotifySendData;
 		public event Action<ReqInfo> NotifyPostData;
 		public SocketHub () {
@@ -69,25 +65,19 @@ namespace SocketNet {
 	public class ClientHub {
 
 		NetHub _Nethub;
-		public Mediator mediator {
+		public EventHub eventhub {
 			get {
-				return _Nethub.mediator;
+				return _Nethub.eventhub;
 			}
 			set {
-				_Nethub.mediator = value;
+				_Nethub.eventhub = value;
 			}
 		}
 		public event Action<string, object> NotifyNetEvent;
-		public void OnNetEvent (string key, object o) {
-			mediator.publish (key, o);
-		}
-		public void OnSendData (ReqInfo reqinfo) {
-			NotifyNetEvent ("socket-send-data", reqinfo);
-		}
-		public void OnPostData (ReqInfo reqinfo) {
-			NotifyNetEvent ("socket-post-data", reqinfo);
-		}
-		public event Action<RespRawData> NotifyReceiveData;
+        public void OnNetEvent(string key, object o) => eventhub.input(key, o);
+        public void OnSendData(ReqInfo reqinfo) => NotifyNetEvent("socket-send-data", reqinfo);
+        public void OnPostData(ReqInfo reqinfo) => NotifyNetEvent("socket-post-data", reqinfo);
+        public event Action<RespRawData> NotifyReceiveData;
 		public ClientHub () {
 			_Nethub = new NetHub ();
 			_Nethub.ActionMap = new Dictionary<string, Action<object>> {

@@ -5,19 +5,13 @@ namespace SocketNet {
 		const Int32 ENABLE_SESSION = 1 << 0;
 		const Int32 ENABLE_COMPRESS = 1 << 1;
 
-		static bool IsEnabled ( in Int32 input, Int32 bit) {
-			return 0 != (input & bit);
-		}
+        static bool IsEnabled(in Int32 input, Int32 bit) => 0 != (input & bit);
 
-		static Int32 EnableBit (ref Int32 input, Int32 bit) {
-			return input |= bit;
-		}
+        static Int32 EnableBit(ref Int32 input, Int32 bit) => input |= bit;
 
-		static Int32 DisableBit (ref Int32 input, Int32 bit) {
-			return input ^= bit;
-		}
+        static Int32 DisableBit(ref Int32 input, Int32 bit) => input ^= bit;
 
-		public Options Option;
+        public Options Option;
 		public struct Options {
 			public Int32 Value;
 

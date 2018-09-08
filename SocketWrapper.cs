@@ -1,10 +1,10 @@
-﻿using Nito.Collections;
-using System;
+﻿using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Nito.Collections;
 
 namespace SocketNet {
 	using SessionId = System.UInt32;
@@ -37,7 +37,7 @@ namespace SocketNet {
 		public int mark;
 	}
 
-	public struct RespRawData{
+	public struct RespRawData {
 		public int size;
 		public byte[] data;
 	}
@@ -79,8 +79,7 @@ namespace SocketNet {
 
 		public void FinishProcess (bool force = false) {
 			_AbortReadStream = true;
-			if (!this._ReadingStream) {
-			} else {
+			if (!this._ReadingStream) { } else {
 				if (force) {
 					_ReadThread.Join ();
 				}
@@ -104,6 +103,45 @@ namespace SocketNet {
 			});
 		}
 
+		protected AutoResetEvent _OPSocket = new AutoResetEvent (true);
+		protected int _Receive (byte[] buffer, int size, SocketFlags socketFlags) {
+			// _OPSocket.WaitOne ();
+			// try {
+			int len = _socket.Receive (buffer, size, socketFlags);
+			return len;
+			// } catch(Exception e) {
+			// 	throw e;
+			// } finally {
+			// 	_OPSocket.Set ();
+			// }
+		}
+		protected int _Send (byte[] buffer, int size, SocketFlags socketFlags) {
+			//_OPSocket.WaitOne ();
+			int len = _socket.Send (buffer, size, socketFlags);
+			//_OPSocket.Set ();
+			return len;
+		}
+		protected bool _Poll (int microSeconds, SelectMode mode) {
+			//_OPSocket.WaitOne ();
+			bool ok = _socket.Poll (microSeconds, mode);
+			//_OPSocket.Set ();
+			return ok;
+		}
+
+		protected int _ReceiveTimeout = 1000;
+		protected int _PollTimeout = 1000*1000;
+		protected void _SetBlocking (bool b) {
+			// _OPSocket.WaitOne ();
+			// _socket.Blocking=b;
+			// _OPSocket.Set();
+			_socket.Blocking = true;
+			if (b) {
+				_socket.ReceiveTimeout = _ReceiveTimeout;
+			} else {
+				_socket.ReceiveTimeout = 1;
+			}
+		}
+
 		Semaphore _ProcessCount;
 		Semaphore _DetectConnection;
 		public bool IsConnected () {
@@ -113,11 +151,11 @@ namespace SocketNet {
 
 			_DetectConnection.WaitOne ();
 			bool b = true;
-			if (_socket.Poll (1, SelectMode.SelectRead)) {
+			if (_Poll (1, SelectMode.SelectRead)) {
 				try {
-					_socket.Blocking = false;
+					_SetBlocking (false);
 					byte[] tmp = new byte[2];
-					int nRead = _socket.Receive (tmp, 1, SocketFlags.Peek);
+					int nRead = _Receive (tmp, 1, SocketFlags.Peek);
 					if (nRead == 0) {
 						b = false;
 					}
@@ -126,32 +164,33 @@ namespace SocketNet {
 						b = false;
 					}
 				} finally {
-					_socket.Blocking = true;
+					_SetBlocking (true);
 				}
 			}
 
 			if (b) {
 				try {
-					_socket.Blocking = false;
+					_SetBlocking (false);
 					byte[] tmp = new byte[2];
-					int nRead = _socket.Receive (tmp, 1, SocketFlags.Peek);
-					_socket.Send (tmp, 0, SocketFlags.None);
+					// int nRead = _Receive (tmp, 1, SocketFlags.Peek);
+					_Send (tmp, 0, SocketFlags.None);
 				} catch (SocketException e) {
 					if (!e.NativeErrorCode.Equals (10035)) {
 						b = false;
 					}
 				} finally {
-					_socket.Blocking = true;
+					_SetBlocking (true);
 				}
 			}
 			_DetectConnection.Release ();
 			return b;
 		}
+
 		protected bool _WritingStream = false;
 		protected bool _AbortWriteStream = false;
 		public void WriteProcess () {
 			_ProcessCount.WaitOne ();
-			_socket.SendTimeout = 1000;
+			_socket.SendTimeout = _ReceiveTimeout;
 			while (true) {
 				//Console.WriteLine("lkjef");
 				if (_AbortWriteStream) {
@@ -172,7 +211,7 @@ namespace SocketNet {
 					}
 				}
 
-				if (!_socket.Poll (1000, SelectMode.SelectWrite)) {
+				if (!_Poll (_PollTimeout, SelectMode.SelectWrite)) {
 					continue;
 				}
 
@@ -193,7 +232,7 @@ namespace SocketNet {
 					Buffer.BlockCopy (info.data, 0, respBytes, respheadsize, info.len);
 					Buffer.BlockCopy (endBytes, 0, respBytes, respheadsize + info.len, respendsize);
 					_WritingStream = true;
-					_socket.Send (respBytes, respinfosize, SocketFlags.None);
+					_Send (respBytes, respinfosize, SocketFlags.None);
 					_WritingStream = false;
 					_PostDeque.RemoveFromFront ();
 				} catch (Exception e) {
@@ -209,7 +248,7 @@ namespace SocketNet {
 		protected int _CurWaitReadSize = 0;
 		public void ReadProcess () {
 			_ProcessCount.WaitOne ();
-			_socket.ReceiveTimeout = 1000;
+			_socket.ReceiveTimeout = _ReceiveTimeout;
 			while (true) {
 				if (_AbortReadStream) {
 					break;
@@ -221,7 +260,7 @@ namespace SocketNet {
 					}
 				}
 
-				if (!_socket.Poll (_socket.ReceiveTimeout, SelectMode.SelectRead)) {
+				if (!_Poll (_PollTimeout, SelectMode.SelectRead)) {
 					continue;
 				}
 				if (_socket.Available < _CurWaitReadSize) {
@@ -230,12 +269,12 @@ namespace SocketNet {
 				try {
 					int respheadsize = Marshal.SizeOf (typeof (RespHeadInfo));
 					byte[] recvBytes = new byte[respheadsize + 4];
-					int nResult = _socket.Receive (recvBytes, respheadsize, SocketFlags.Peek);
+					int nResult = _Receive (recvBytes, respheadsize, SocketFlags.Peek);
 					var respinfo = (RespHeadInfo) DataTypeUtil.BytesToStruct (recvBytes, typeof (RespHeadInfo), respheadsize);
 					if (nResult == 0) {
 						continue;
 					} else if (respinfo.mark != RespHeadInfo.headmark) {
-						_socket.Receive (recvBytes, 1, SocketFlags.None);
+						_Receive (recvBytes, 1, SocketFlags.None);
 						continue;
 					}
 					const int respendsize = sizeof (uint);
@@ -250,7 +289,7 @@ namespace SocketNet {
 					byte[] endBytes = new byte[respendsize + 4];
 
 					_ReadingStream = true;
-					var nResult2 = _socket.Receive (respBytes, totalsize, SocketFlags.None);
+					var nResult2 = _Receive (respBytes, totalsize, SocketFlags.None);
 					if (nResult2 == 0) {
 						continue;
 					}
@@ -272,14 +311,17 @@ namespace SocketNet {
 
 				} catch (SocketException e) {
 					_ReadingStream = false;
+				} catch (Exception e) {
+					_ReadingStream = false;
+					Console.WriteLine (e);
 				}
 			}
 			_ProcessCount.Release ();
 		}
 
 		protected void _OnReceiveData (byte[] bodyBytes, int bodysize) {
-			var respdata=new RespRawData {data = bodyBytes, size = bodysize };
-			this.NotifyReceivedData(respdata);
+			var respdata = new RespRawData { data = bodyBytes, size = bodysize };
+			this.NotifyReceivedData (respdata);
 		}
 		public event Action<RespRawData> NotifyReceivedData;
 
@@ -344,23 +386,23 @@ namespace SocketNet {
 		}
 
 		public void Post (ReqInfo info) {
-			var count=_PostDeque.Count;
+			var count = _PostDeque.Count;
 			this._PostDeque.AddToBack (info);
-			if (count==0 && _PostDeque.Count !=0) {
+			if (count == 0 && _PostDeque.Count != 0) {
 				_QueueEvent.Set ();
 			}
 		}
 
 		public void Send (ReqInfo info) {
-			var count=_PostDeque.Count;
+			var count = _PostDeque.Count;
 			this._PostDeque.AddToFront (info);
-			if (count==0 && _PostDeque.Count !=0) {
+			if (count == 0 && _PostDeque.Count != 0) {
 				_QueueEvent.Set ();
 			}
 		}
 
-		public void abortAll(){
-			_PostDeque.Clear();
+		public void abortAll () {
+			_PostDeque.Clear ();
 		}
 
 	}

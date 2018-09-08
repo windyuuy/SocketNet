@@ -9,9 +9,6 @@ namespace SocketNet{
 		public ClientProxy (VirtualClient client) {
 			this.client = client;
 		}
-		~ClientProxy(){
-			Console.WriteLine("hello");
-		}
 
 		public bool Send (SessionInfo info, DataCallback fn) {
 			return client.Send (info, fn);
