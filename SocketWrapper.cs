@@ -53,7 +53,6 @@ namespace SocketNet {
 		// AutoResetEvent _QueueEvent;
 		SafeDeque<ReqInfo> _PostDeque;
 		SafeDeque<RespRawData> _ReceivedEventQueue;
-		Task _ConnHand;
 
 		Logger log;
 		public SocketWrapper () {
@@ -85,35 +84,24 @@ namespace SocketNet {
 			_EventThread.Start ();
 		}
 
-		public void FinishProcess (bool force = false) {
+		public async void FinishProcess (bool force = false) {
 			_AbortReadStream = true;
-			if (!this._ReadingStream) { } else {
-				if (force) {
-					_ReadThread.Join ();
-				}
-			}
-
 			_AbortWriteStream = true;
+			_AbortEventProcess = true;
+
+			if (!this._ReadingStream) { }
+
 			if (!this._WritingStream) {
 				// if (_PostDeque.Count <= 0) {
 				// 	_QueueEvent.Set ();
 				// }
 				_PostDeque.SetEvent ();
-			} else {
-				if (force) {
-					_WriteTread.Join ();
-				}
 			}
 
-			_AbortEventProcess = true;
 			if (!this._ProcessingEvent) {
 				_ReceivedEventQueue.SetEvent ();
-			} else {
-				if (force) {
-					_EventThread.Join ();
-				}
 			}
-			Task.Run (() => {
+			var wait = Task.Run (() => {
 				_ProcessCount.WaitOne ();
 				_ProcessCount.WaitOne ();
 				_ProcessCount.WaitOne ();
@@ -123,6 +111,12 @@ namespace SocketNet {
 				_PostDeque.WaitOneEvent ();
 				_ReceivedEventQueue.WaitOneEvent ();
 			});
+			if (force) {
+				await wait;
+				_ReadThread.Join ();
+				_WriteTread.Join ();
+				_EventThread.Join ();
+			}
 		}
 
 		protected AutoResetEvent _OPSocket = new AutoResetEvent (true);
@@ -234,15 +228,14 @@ namespace SocketNet {
 					break;
 				}
 
-				// if (_PostDeque.Count <= 0) {
-				// 	// log.Debug ("waitq");
-				// 	_QueueEvent.WaitOne ();
-				// 	// log.Debug ("exit waitq");
-				// 	if (_PostDeque.Count <= 0) {
-				// 		continue;
-				// 	}
-				// }
-
+                // if (_PostDeque.Count <= 0) {
+                // 	// log.Debug ("waitq");
+                // 	_QueueEvent.WaitOne ();
+                // 	// log.Debug ("exit waitq");
+                // 	if (_PostDeque.Count <= 0) {
+                // 		continue;
+                // 	}
+                // }
 				if (!this.IsConnected ()) {
 					// log.Debug ("waitcn");
 					_ConnEventW.WaitOne ();
@@ -312,9 +305,9 @@ namespace SocketNet {
 				if (!_Poll (_PollTimeout, SelectMode.SelectRead)) {
 					continue;
 				}
-				if (_socket.Available < _CurWaitReadSize) {
+				//if (_socket.Available < _CurWaitReadSize) {
 					//	continue;
-				}
+				//}
 				try {
 					int respheadsize = Marshal.SizeOf (typeof (RespHeadInfo));
 					byte[] recvBytes = new byte[respheadsize + 4];
@@ -385,7 +378,7 @@ namespace SocketNet {
 					break;
 				}
 				var respdata = _ReceivedEventQueue.TryRemoveFromFront ();
-				if(respdata.data==null){
+				if (respdata.data == null) {
 					continue;
 				}
 				try {
@@ -447,7 +440,7 @@ namespace SocketNet {
 			var e = new SocketAsyncEventArgs ();
 			e.DisconnectReuseSocket = true;
 			_socket.DisconnectAsync (e);
-			_socket = null;
+			// _socket = null;
 		}
 
 		public bool MaintainConnection () {
