@@ -52,6 +52,7 @@ namespace SocketNet {
 		AutoResetEvent _ConnEventW;
 		AutoResetEvent _QueueEvent;
 		SafeDeque<ReqInfo> _PostDeque;
+		SafeDeque<RespRawData> _ReceivedEventQueue;
 		Task _ConnHand;
 
 		Logger log;
@@ -60,13 +61,15 @@ namespace SocketNet {
 				_socket = new Socket (AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 				_CurWaitReadSize = _RespInfoSize;
 				_PostDeque = new SafeDeque<ReqInfo> ();
+				_ReceivedEventQueue = new SafeDeque<RespRawData> ();
 				_ConnEventR = new AutoResetEvent (false);
 				_ConnEventW = new AutoResetEvent (false);
 				_QueueEvent = new AutoResetEvent (false);
 				_WriteTread = new Thread (this.WriteProcess);
 				_ReadThread = new Thread (this.ReadProcess);
+				_EventThread = new Thread (this.ProcessReceiveEvents);
 				_DetectConnection = new Semaphore (1, 1);
-				_ProcessCount = new Semaphore (2, 2);
+				_ProcessCount = new Semaphore (3, 3);
 			}
 
 			~SocketWrapper () {
@@ -75,9 +78,11 @@ namespace SocketNet {
 
 		Thread _WriteTread;
 		Thread _ReadThread;
+		Thread _EventThread;
 		public void BeginProcess () {
 			_WriteTread.Start ();
 			_ReadThread.Start ();
+			_EventThread.Start ();
 		}
 
 		public void FinishProcess (bool force = false) {
@@ -90,19 +95,33 @@ namespace SocketNet {
 
 			_AbortWriteStream = true;
 			if (!this._WritingStream) {
-				if (_PostDeque.Count <= 0) {
-					_QueueEvent.Set ();
-				}
+				// if (_PostDeque.Count <= 0) {
+				// 	_QueueEvent.Set ();
+				// }
+				_PostDeque.SetEvent ();
 			} else {
 				if (force) {
 					_WriteTread.Join ();
 				}
 			}
+
+			_AbortEventProcess = true;
+			if (!this._ProcessingEvent) {
+				_ReceivedEventQueue.SetEvent ();
+			} else {
+				if (force) {
+					_EventThread.Join ();
+				}
+			}
 			Task.Run (() => {
 				_ProcessCount.WaitOne ();
 				_ProcessCount.WaitOne ();
+				_ProcessCount.WaitOne ();
 				_ProcessCount.Release ();
 				_ProcessCount.Release ();
+				_ProcessCount.Release ();
+				_PostDeque.WaitOneEvent ();
+				_ReceivedEventQueue.WaitOneEvent ();
 			});
 		}
 
@@ -215,14 +234,14 @@ namespace SocketNet {
 					break;
 				}
 
-				if (_PostDeque.Count <= 0) {
-					// log.Debug ("waitq");
-					_QueueEvent.WaitOne ();
-					// log.Debug ("exit waitq");
-					if (_PostDeque.Count <= 0) {
-						continue;
-					}
-				}
+				// if (_PostDeque.Count <= 0) {
+				// 	// log.Debug ("waitq");
+				// 	_QueueEvent.WaitOne ();
+				// 	// log.Debug ("exit waitq");
+				// 	if (_PostDeque.Count <= 0) {
+				// 		continue;
+				// 	}
+				// }
 
 				if (!this.IsConnected ()) {
 					// log.Debug ("waitcn");
@@ -258,7 +277,7 @@ namespace SocketNet {
 					//totalsentsize += nResult;
 					//log.Debug ("Sent: {0} {1}", totalsentsize, nResult);
 					_WritingStream = false;
-					_PostDeque.GetRemoveFromFront ();
+					_PostDeque.RemoveFromFront ();
 				} catch (Exception e) {
 					_WritingStream = false;
 				}
@@ -271,7 +290,9 @@ namespace SocketNet {
 		//int totalsentsize = 0;
 
 		protected bool _ReadingStream = false;
+		protected bool _ProcessingEvent = false;
 		protected bool _AbortReadStream = false;
+		protected bool _AbortEventProcess = false;
 		protected int _RespInfoSize = Marshal.SizeOf (typeof (RespHeadInfo));
 		protected int _CurWaitReadSize = 0;
 		public void ReadProcess () {
@@ -340,11 +361,7 @@ namespace SocketNet {
 					// var str = Encoding.Unicode.GetString (bodyBytes, 0, bodysize);
 					// log.Debug (str);
 
-					try {
-						this._OnReceiveData (bodyBytes, bodysize);
-					} catch (Exception e) {
-						log.Error (string.Format ("error: {0}", e));
-					}
+					this._OnReceiveData (bodyBytes, bodysize);
 
 				} catch (SocketException e) { } catch (InvalidOperationException e) { } catch (Exception e) {
 					log.Error (string.Format ("error: {0}", e));
@@ -358,8 +375,29 @@ namespace SocketNet {
 
 		protected void _OnReceiveData (byte[] bodyBytes, int bodysize) {
 			var respdata = new RespRawData { data = bodyBytes, size = bodysize };
-			this.NotifyReceivedData (respdata);
+			this._ReceivedEventQueue.AddToBack (respdata);
 		}
+
+		protected void ProcessReceiveEvents () {
+			_ProcessCount.WaitOne ();
+			while (true) {
+				if (_AbortEventProcess) {
+					break;
+				}
+				var respdata = _ReceivedEventQueue.TryRemoveFromFront ();
+				if(respdata.data==null){
+					continue;
+				}
+				try {
+					this.NotifyReceivedData (respdata);
+				} catch (Exception e) {
+					log.Error (string.Format ("error: {0}", e));
+				}
+			}
+			log.Debug ("exit processing event");
+			_ProcessCount.Release ();
+		}
+
 		public event Action<RespRawData> NotifyReceivedData;
 
 		public bool Connect (string ip, int port) {
@@ -425,17 +463,17 @@ namespace SocketNet {
 		public void Post (ReqInfo info) {
 			var count = _PostDeque.Count;
 			this._PostDeque.AddToBack (info);
-			if (count == 0 && _PostDeque.Count != 0) {
-				_QueueEvent.Set ();
-			}
+			// if (count == 0 && _PostDeque.Count != 0) {
+			// 	_QueueEvent.Set ();
+			// }
 		}
 
 		public void Send (ReqInfo info) {
 			var count = _PostDeque.Count;
 			this._PostDeque.AddToFront (info);
-			if (count == 0 && _PostDeque.Count != 0) {
-				_QueueEvent.Set ();
-			}
+			// if (count == 0 && _PostDeque.Count != 0) {
+			// 	_QueueEvent.Set ();
+			// }
 		}
 
 		public void abortAll () {
