@@ -62,9 +62,16 @@ namespace SocketNet {
 		public void OnReceivedData (RespRawData reqinfo) {
 			var bytedata = reqinfo.data;
 			var len = reqinfo.size;
-			var rawdata = (SessionRawData) DataTypeUtil.BytesToStruct (bytedata, typeof (SessionRawData), len);
-			var data = (byte[]) rawdata.data;
-			var datalen = data.Length;
+
+			// var rawdata = (SessionRawData) DataTypeUtil.BytesToStruct (bytedata, typeof (SessionRawData), len);
+			// var data = (byte[]) rawdata.data;
+			// var datalen = data.Length;
+
+			int headsize = Marshal.SizeOf (typeof (SessionRawDataHead));
+			var datalen = len - headsize;
+			var rawdata = (SessionRawDataHead) DataTypeUtil.BytesToStruct (bytedata, typeof (SessionRawDataHead), headsize);
+			var data = new byte[datalen];
+			Buffer.BlockCopy (bytedata, headsize, data, 0, datalen);
 
 			var respdata = new RespData {
 				sessionid = rawdata.sessionid,
@@ -88,11 +95,6 @@ namespace SocketNet {
 
 			var sessionid = info.sessionid;
 			var reqid = info.reqid;
-			var rawdata = new SessionRawData {
-				sessionid = sessionid,
-					reqid = info.reqid,
-					data = info.data,
-			};
 
 			{
 				var eventfilter = new EventFilter ("client-received-data");
@@ -109,10 +111,30 @@ namespace SocketNet {
 				eventhub.notify += eventfilter.input;
 
 			}
+			// var rawdata = new SessionRawData {
+			// 	sessionid = sessionid,
+			// 		reqid = info.reqid,
+			// 		data = info.data,
+			// };
+			var rawdata = new SessionRawDataHead {
+				sessionid = sessionid,
+					reqid = info.reqid,
+			};
 
 			{
-				var len = Marshal.SizeOf (typeof (SessionRawDataHead)) + ((byte[]) rawdata.data).Length;
-				var bytedata = DataTypeUtil.StructToBytes (rawdata, len);
+				// var len = Marshal.SizeOf (typeof (SessionRawDataHead)) + ((byte[]) rawdata.data).Length;
+				// var bytedata = DataTypeUtil.StructToBytes (rawdata, len);
+
+				var rawbytedata = (byte[]) info.data;
+				int headlen = Marshal.SizeOf (typeof (SessionRawDataHead));
+				var len = headlen + rawbytedata.Length;
+				var bytedata = new byte[len];
+				Buffer.BlockCopy (DataTypeUtil.StructToBytes (rawdata, headlen), 0, bytedata, 0, headlen);
+				Buffer.BlockCopy (rawbytedata, 0, bytedata, headlen, rawbytedata.Length);
+				if (len != bytedata.Length) {
+					throw new Exception ("");
+				}
+
 				var reqinfo = new ReqInfo {
 					method = info.method,
 						data = bytedata,
