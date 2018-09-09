@@ -17,7 +17,7 @@ namespace SocketNet{
 		public Logger(string tag){
 			tags.Append("[");
 			tags.Append(tag);
-			tags.Append("] ");
+			tags.Append("]");
 		}
 		
 		public void Log(string s){
