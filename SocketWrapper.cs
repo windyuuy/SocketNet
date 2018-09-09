@@ -72,7 +72,7 @@ namespace SocketNet {
 			}
 
 			~SocketWrapper () {
-				this.FinishProcess ();
+				this.FinishProcess (true);
 			}
 
 		Thread _WriteTread;
