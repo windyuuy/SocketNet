@@ -50,7 +50,7 @@ namespace SocketNet {
 
 		AutoResetEvent _ConnEventR;
 		AutoResetEvent _ConnEventW;
-		AutoResetEvent _QueueEvent;
+		// AutoResetEvent _QueueEvent;
 		SafeDeque<ReqInfo> _PostDeque;
 		SafeDeque<RespRawData> _ReceivedEventQueue;
 		Task _ConnHand;
@@ -64,7 +64,7 @@ namespace SocketNet {
 				_ReceivedEventQueue = new SafeDeque<RespRawData> ();
 				_ConnEventR = new AutoResetEvent (false);
 				_ConnEventW = new AutoResetEvent (false);
-				_QueueEvent = new AutoResetEvent (false);
+				// _QueueEvent = new AutoResetEvent (false);
 				_WriteTread = new Thread (this.WriteProcess);
 				_ReadThread = new Thread (this.ReadProcess);
 				_EventThread = new Thread (this.ProcessReceiveEvents);
