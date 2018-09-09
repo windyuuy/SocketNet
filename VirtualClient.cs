@@ -1,6 +1,5 @@
 using System;
 using System.Runtime.InteropServices;
-using TMediator;
 
 namespace SocketNet {
 
@@ -56,7 +55,6 @@ namespace SocketNet {
 			}
 		}
 
-		// public Mediator mediator;
 		public EventHub eventhub;
 
 		public void OnReceivedData (RespRawData reqinfo) {

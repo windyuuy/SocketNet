@@ -1,6 +1,5 @@
 // socket manager
 using System.Collections.Generic;
-using TMediator;
 
 namespace SocketNet {
 	class SocketMG {
@@ -29,7 +28,6 @@ namespace SocketNet {
 			}
 		}
 
-		Mediator mediator = new Mediator ();
 		EventHub eventhub=new EventHub();
 		SocketHub shub = new SocketHub ();
 		ClientHub chub = new ClientHub ();

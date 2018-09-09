@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using TMediator;
 
 namespace SocketNet {
 	class NetHub {
