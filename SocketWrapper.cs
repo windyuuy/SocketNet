@@ -110,19 +110,30 @@ namespace SocketNet {
 		protected int _Receive (byte[] buffer, int size, SocketFlags socketFlags) {
 			// _OPSocket.WaitOne ();
 			// try {
-			int len = _socket.Receive (buffer, size, socketFlags);
-			return len;
-			// } catch(Exception e) {
+			// 	int len = _socket.Receive (buffer, size, socketFlags);
+			// 	return len;
+			// } catch (Exception e) {
 			// 	throw e;
 			// } finally {
 			// 	_OPSocket.Set ();
 			// }
+			int len = _socket.Receive (buffer, size, socketFlags);
+			return len;
+
 		}
 		protected int _Send (byte[] buffer, int size, SocketFlags socketFlags) {
-			//_OPSocket.WaitOne ();
+			// _OPSocket.WaitOne ();
+			// try {
+			// 	int len = _socket.Send (buffer, size, socketFlags);
+			// 	return len;
+			// } catch (Exception e) {
+			// 	throw e;
+			// } finally {
+			// 	_OPSocket.Set ();
+			// }
 			int len = _socket.Send (buffer, size, socketFlags);
-			//_OPSocket.Set ();
 			return len;
+
 		}
 		protected bool _Poll (int microSeconds, SelectMode mode) {
 			//_OPSocket.WaitOne ();
@@ -131,7 +142,7 @@ namespace SocketNet {
 			return ok;
 		}
 
-		protected int _ReceiveTimeout = 1000;
+		protected int _ReceiveTimeout = 2000;
 		protected int _PollTimeout = 1000 * 1000;
 		protected void _SetBlocking (bool b) {
 			// _OPSocket.WaitOne ();
@@ -252,7 +263,7 @@ namespace SocketNet {
 					_WritingStream = false;
 				}
 			}
-			//log.Debug ("exit writing");
+			log.Debug ("exit writing");
 			_ProcessCount.Release ();
 		}
 
@@ -306,15 +317,14 @@ namespace SocketNet {
 					byte[] bodyBytes = new byte[bodysize + 4];
 					byte[] endBytes = new byte[respendsize + 4];
 
-					_ReadingStream = true;
-					var nResult2 = _Receive (respBytes, totalsize, SocketFlags.None);
-					if (nResult2 == 0) {
+					var nResult2 = _Receive (respBytes, totalsize, SocketFlags.Peek);
+					if (nResult2 == 0 || nResult2 < totalsize) {
+						Thread.Sleep (_ReceiveTimeout / 8);
 						continue;
 					}
 					//totalrecvsize += nResult2;
 					//log.Debug("size: {0} {1}", totalrecvsize, nResult);
 					_CurWaitReadSize = _RespInfoSize;
-					_ReadingStream = false;
 
 					Buffer.BlockCopy (respBytes, respheadsize, bodyBytes, 0, bodysize);
 					Buffer.BlockCopy (respBytes, respheadsize + bodysize, endBytes, 0, respendsize);
@@ -324,23 +334,25 @@ namespace SocketNet {
 					if (end.mark != RespEndInfo.endmark) {
 						log.Warn ("error:unmatched mark");
 					}
+					_ReadingStream = true;
+					_Receive (respBytes, totalsize, SocketFlags.None);
+					_ReadingStream = false;
 					// var str = Encoding.Unicode.GetString (bodyBytes, 0, bodysize);
 					// log.Debug (str);
 
-					this._OnReceiveData (bodyBytes, bodysize);
+					try {
+						this._OnReceiveData (bodyBytes, bodysize);
+					} catch (Exception e) {
+						log.Error (string.Format ("error: {0}", e));
+					}
 
-				} catch (SocketException e) {
-				}catch(InvalidOperationException e)
-                {
-                }catch(Exception e)
-                {
-                    log.Error(string.Format("error: {0}",e));
-                }
-                finally
-                {
-                    _ReadingStream = false;
-                }
-            }
+				} catch (SocketException e) { } catch (InvalidOperationException e) { } catch (Exception e) {
+					log.Error (string.Format ("error: {0}", e));
+				} finally {
+					_ReadingStream = false;
+				}
+			}
+			log.Debug ("exit reading");
 			_ProcessCount.Release ();
 		}
 
