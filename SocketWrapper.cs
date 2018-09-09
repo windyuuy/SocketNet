@@ -156,6 +156,7 @@ namespace SocketNet {
 		}
 
 		protected int _ReceiveTimeout = 2000;
+		protected int _DataLackWaitingTime=10;
 		protected int _PollTimeout = 1000 * 1000;
 		protected void _SetBlocking (bool b) {
 			// _OPSocket.WaitOne ();
@@ -333,7 +334,7 @@ namespace SocketNet {
 
 					var nResult2 = _Receive (respBytes, totalsize, SocketFlags.Peek);
 					if (nResult2 == 0 || nResult2 < totalsize) {
-						Thread.Sleep (_ReceiveTimeout / 8);
+						Thread.Sleep (_DataLackWaitingTime);
 						continue;
 					}
 					//totalrecvsize += nResult2;
