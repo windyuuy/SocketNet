@@ -447,7 +447,7 @@ namespace SocketNet {
 
 		int _ReconnectTimes = 0;
 		public int MaxReconnectTime = -1;
-		public int ReconnectInterval = 2000;
+		public int ReconnectInterval = 3000;
 		protected bool _Connect (string ip, int port) {
 			_ReconnectTimes++;
 			if (MaxReconnectTime != -1 && _ReconnectTimes > MaxReconnectTime) {
