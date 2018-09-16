@@ -389,7 +389,11 @@ namespace SocketNet {
 				}
 				if (_socket.Available < _CurWaitReadSize && _ReceivedEventQueue.Count <= 0) {
 					if (!IsConnected ()) {
-						NotifyDisconnect?.Invoke ();
+						try {
+							NotifyDisconnect?.Invoke ();
+						} catch (Exception e) {
+							Console.WriteLine (string.Format ("error: {0}", e));
+						}
 					}
 				}
 				var respdata = _ReceivedEventQueue.TryRemoveFromFront ();
@@ -461,6 +465,7 @@ namespace SocketNet {
 					_ConnEventR.Set ();
 					_ConnEventW.Set ();
 					_ReconnectTimes = 0;
+					this._OnConnected ();
 				}
 			}, null);
 			System.Timers.Timer t = new System.Timers.Timer (ReconnectInterval);
@@ -473,6 +478,15 @@ namespace SocketNet {
 			t.AutoReset = false;
 			t.Enabled = true;
 			return true;
+		}
+
+		protected event Action NotifyConnected;
+		public void _OnConnected () {
+			try {
+				this.NotifyConnected?.Invoke ();
+			} catch (Exception e) {
+				Console.WriteLine (string.Format ("error: {0}", e));
+			}
 		}
 
 		bool _Reconnect () {
