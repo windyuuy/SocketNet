@@ -379,13 +379,15 @@ namespace SocketNet {
 			this._ReceivedEventQueue.AddToBack (respdata);
 		}
 
+		#endregion
+		#region received data process
 		protected void ProcessReceiveEvents () {
 			_ProcessCount.WaitOne ();
 			while (true) {
 				if (_AbortEventProcess) {
 					break;
 				}
-				if (_socket.Available < _CurWaitReadSize && _ReceivedEventQueue.Count<=0) {
+				if (_socket.Available < _CurWaitReadSize && _ReceivedEventQueue.Count <= 0) {
 					if (!IsConnected ()) {
 						NotifyDisconnect?.Invoke ();
 					}
