@@ -4,11 +4,9 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
-using Nito.Collections;
 
 namespace SocketNet {
 	#region define structs
-	using SessionId = System.UInt32;
 	public enum ReqMethod {
 		// byte
 		Byte = 0,
@@ -392,7 +390,7 @@ namespace SocketNet {
 						try {
 							NotifyDisconnect?.Invoke ();
 						} catch (Exception e) {
-							Console.WriteLine (string.Format ("error: {0}", e));
+							log.Error (string.Format ("error: {0}", e));
 						}
 					}
 				}
@@ -485,7 +483,7 @@ namespace SocketNet {
 			try {
 				this.NotifyConnected?.Invoke ();
 			} catch (Exception e) {
-				Console.WriteLine (string.Format ("error: {0}", e));
+				log.Error (string.Format ("error: {0}", e));
 			}
 		}
 

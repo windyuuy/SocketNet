@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using MyLogger;
 
 namespace SocketNet{
 	public class Logger{
@@ -14,6 +15,7 @@ namespace SocketNet{
 			["warn"]=1200,
 			["error"]=1300,
 		};
+		NLog.Logger logger=LogMG.instance.logger;
 		public Logger(string tag){
 			tags.Append("[");
 			tags.Append(tag);
@@ -25,20 +27,20 @@ namespace SocketNet{
 		}
 		public void Info<T>(T s){
 			if(level>levelmap["info"]){return;}
-			Console.WriteLine(string.Format("-{0}{1}{2}",tags,"[Info] ",s));
+			logger.Info(string.Format("-{0}{1}{2}",tags,"[Info] ",s));
 		}
 		
 		public void Debug<T>(T s){
 			if(level>levelmap["debug"]){return;}
-			Console.WriteLine(string.Format("-{0}{1}{2}",tags,"[debug] ",s));
+			logger.Debug(string.Format("-{0}{1}{2}",tags,"[debug] ",s));
 		}
 		public void Warn<T>(T s){
 			if(level>levelmap["warn"]){return;}
-			Console.WriteLine(string.Format("-{0}{1}{2}",tags,"[warn] ",s));
+			logger.Warn(string.Format("-{0}{1}{2}",tags,"[warn] ",s));
 		}
 		public void Error<T>(T s){
 			if(level>levelmap["error"]){return;}
-			Console.WriteLine(string.Format("-{0}{1}{2}",tags,"[error] ",s));
+			logger.Error(string.Format("-{0}{1}{2}",tags,"[error] ",s));
 		}
 	}
 }
