@@ -4,8 +4,8 @@ using System.Collections.Generic;
 namespace SocketNet {
 	class SocketMG {
 
-		List<SocketWrapper> sockets = new List<SocketWrapper> ();
-		public void AddSocket (SocketWrapper socket) {
+		List<ISocketWrapper> sockets = new List<ISocketWrapper> ();
+		public void AddSocket (ISocketWrapper socket) {
 			sockets.Add (socket);
 
 			socket.NotifyReceivedData += shub.OnReceiveData;
@@ -14,7 +14,7 @@ namespace SocketNet {
 
 		}
 
-		public void RemoveSocket (SocketWrapper socket) {
+		public void RemoveSocket (ISocketWrapper socket) {
 			socket.NotifyReceivedData -= shub.OnReceiveData;
 			shub.NotifyPostData -= socket.Post;
 			shub.NotifySendData -= socket.Send;
